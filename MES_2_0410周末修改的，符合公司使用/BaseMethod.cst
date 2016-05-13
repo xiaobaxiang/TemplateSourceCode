@@ -1,0 +1,74 @@
+﻿<%-- 
+Name:包含了共用的方法
+Author: baweixiang
+Description: 公用方法类,针对单个表生成的
+Date:2016-04-08 15:44:52
+Version:1.0
+--%>
+<%@ CodeTemplate Inherits="CodeTemplate" TargetLanguage="Text" Description="NetTiers main template." Debug="True" ResponseEncoding="UTF-8"%>
+
+<%@ Assembly Name="System.Collections"%>
+<%@ Import Namespace="System.Collections.Generic"%>
+
+<%-- 加载访问数据库的组件SchemaExplorer,并声明其使用的命名空间 --%>
+<%@ Assembly Name="SchemaExplorer"%>
+<%@ Import Namespace="SchemaExplorer"%>
+//在子类模板中使用Register可以使用本模板的方法
+<script runat="template">
+    public string PrintTableInfo(TableSchema Table)
+    {
+        List<ColumnSchema> lcs=new  List<ColumnSchema>();
+        string temKey="",tableName="tableName";
+       // tableName=Table.Name.Split("_").AsQueryable();
+        if(Table.PrimaryKey.MemberColumns.Count>0)
+        {
+            string ouput="";
+            if(GetColumnDataType(Table.PrimaryKey.MemberColumns[0],out ouput)=="int")
+            {
+                temKey="n"+Table.PrimaryKey.MemberColumns[0].Name;
+            }else
+            {
+                temKey="s"+Table.PrimaryKey.MemberColumns[0].Name;
+            }
+        }
+        string colms="Table.FullName---"+Table.FullName;
+        for(int i=0;i<Table.Columns.Count;i++)
+        {
+             colms+=Table.Columns[i].DataType+":"+Table.Columns[i].Name+"\n";
+             if(!Table.Columns[i].Name.Equals("STATUS_NO")&&!Table.Columns[i].Name.Equals("CREATE_USERID")&&!Table.Columns[i].Name.Equals("UPDATE_USERID")&&!Table.Columns[i].Name.Equals("CREATE_DATE")&&!Table.Columns[i].Name.Equals("UPDATE_DATE"))
+             lcs.Add(Table.Columns[i]);
+        }
+        return colms;
+    }
+    
+    public string GetColumnDataType(ColumnSchema col,out string defaultValue)
+    {
+        string type="";
+        defaultValue="";
+        switch(col.DataType.ToString())
+        {
+            case "Int16":
+            case "Int32":
+            case "Int64":type="int";defaultValue="-1";break;
+            case "Char":type="char";defaultValue="";break;
+            case "AnsiString":type="string";defaultValue="";break;
+            case "DateTime":type="DateTime";
+                defaultValue="";
+                //defaultValue=DateTime.MinValue.ToString("yyyy/MM/dd hh:mm:ss");
+                break;
+            default: type="string";defaultValue="";break;
+        }
+        return type;
+    }
+    
+    public string GetTableSchema(TableSchema Table)
+    {
+       string[] arrs= Table.FullName.Split('.');
+        if(arrs.Length>=2)
+            return arrs[0];
+        else
+            return "";
+    }
+</script>
+<% Response.WriteLine("sadfsa"); %>
+<%="safdasfa" %>

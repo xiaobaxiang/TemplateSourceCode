@@ -1,0 +1,213 @@
+﻿<%-- 
+Name:SO查询部分
+Author: bwx
+Description: 生成控制器所要使用查询的相关代码
+Date:2016-04-10 03:30:04
+Version:1.0
+--%>
+<%@ Template Language="C#" TargetLanguage="Text" %>
+
+<%-- 加载访问数据库的组件SchemaExplorer,并声明其使用的命名空间 --%>
+<%@ Assembly Name="SchemaExplorer"%>
+<%@ Import Namespace="SchemaExplorer"%>
+
+<%@ Assembly Name="System.Collections"%>
+<%@ Import Namespace="System.Collections.Generic"%>
+
+<%@ Import Namespace="System.Linq" %>
+<%-- 选择要操作的表 --%>
+<%@ Property Name="Table" Type="SchemaExplorer.TableSchema" DeepLoad="True" Optional="False" Category="01. Getting Started - Required" Description="Database that the tables views, and stored procedures shouldbe based on. IMPORTANT!!! If SourceTables and SourceViews are left blank, theEntire Database will then be generated." %>
+打印表中的信息:\n
+<%=PrintTableInfo() %>
+<script runat="template">
+    List<ColumnSchema> lcs=new  List<ColumnSchema>();
+    string temKey="",tableName="tableName";
+    public string PrintTableInfo()
+    {
+        //tableName=Table.Name.Split("_").AsQueryable();
+        if(Table.PrimaryKey.MemberColumns.Count>0)
+        {
+            string ouput="";
+            if(GetColumnDataType(Table.PrimaryKey.MemberColumns[0],out ouput)=="int")
+            {
+                temKey="n"+Table.PrimaryKey.MemberColumns[0].Name;
+            }else
+            {
+                temKey="s"+Table.PrimaryKey.MemberColumns[0].Name;
+            }
+        }
+        string colms="Table.FullName---"+Table.FullName+"\n";
+        for(int i=0;i<Table.Columns.Count;i++)
+        {
+             colms+=Table.Columns[i].DataType+":"+Table.Columns[i].Name+"\n";
+             if(!Table.Columns[i].Name.Equals("AddUserID")&&!Table.Columns[i].Name.Equals("AddDateTime")&&!Table.Columns[i].Name.Equals("UpdateUserID")&&!Table.Columns[i].Name.Equals("UpdateDateTime"))
+             {
+                 lcs.Add(Table.Columns[i]);
+             }
+        }
+        return colms;
+    }
+    
+    public string GetColumnDataType(ColumnSchema col,out string defaultValue)
+    {
+        string type="";
+        defaultValue="";
+        switch(col.DataType.ToString())
+        {
+            case "Int16":
+            case "Int32":
+            case "Int64":type="int";defaultValue="-1";break;
+            case "Char":type="char";defaultValue="";break;
+            case "AnsiString":type="string";defaultValue="";break;
+            case "DateTime":type="string";
+                //defaultValue=DateTime.MinValue.ToString("yyyy/MM/dd hh:mm:ss");
+                defaultValue="";
+                break;
+            default: type="string";defaultValue="";break;
+        }
+        return type;
+    }
+
+    public string GetParseParamter()
+    {
+        string rows="",defaultValue="";
+        foreach(ColumnSchema csa in lcs)
+        {
+            rows+="\t\t\t\t"+GetColumnDataType(csa,out defaultValue)+" "+csa.Name;
+            if(defaultValue.Equals(""))
+                rows +=" = cmn.ParserXML(x, \"//"+Table.Name+"/"+csa.Name+"\");\n";
+            else if(defaultValue.Equals("-1"))
+                rows +=" = cmn.ParserXML(x, \"//"+Table.Name+"/"+csa.Name+"\",-999);\n";
+            else
+                rows +=" = cmn.ParserXML(x, \"//"+Table.Name+"/"+csa.Name+"\");\n";
+        }
+        if(rows.Length>1)
+        {
+            return rows.Substring(0,rows.Length-1);
+        }
+        return rows;
+    }
+    
+    public string GetSql()
+    {
+        string rows="\t\t\t\tsql =\" Select ",defaultValue="";
+        foreach(ColumnSchema csa in lcs)
+        {
+            rows+=csa.Name+",";
+        }
+        rows= rows.Substring(0,rows.Length-1);
+        rows=rows+"\";\n";
+        rows+="\t\t\t\tsql +=\" From "+Table.Name+"\";\n";
+        rows+="\t\t\t\tsql +=\" Where "+Table.PrimaryKey.MemberColumns[0].Name+" is not null\";";
+        return rows;
+    }
+    
+    public string GetWhere()
+    {
+        string rows="",defaultValue="";
+        foreach(ColumnSchema csa in lcs)
+        {
+            GetColumnDataType(csa,out defaultValue);
+            if(defaultValue.Equals(""))
+            {
+                 rows+="\t\t\t\tif (!"+csa.Name+".Equals(\"\")) { sql += \" AND "+csa.Name+" = \" + cmn.SQLQ("+csa.Name+"); }\n";
+            }else if(defaultValue.Equals("-1"))
+            {
+                rows+="\t\t\t\tif ("+csa.Name+" > -1) { sql += \" AND "+csa.Name+" = \" + cmn.SQLQ("+csa.Name+"); }\n";
+            }else{
+                rows+="\t\t\t\tif (!"+csa.Name+".Equals(\"\")) { sql += \" AND "+csa.Name+" = \" + cmn.SQLQ("+csa.Name+"); }\n";
+            }
+        }
+        if(rows.Length>1)
+        {
+            return rows.Substring(0,rows.Length-1);
+        }
+        return rows;
+
+    }
+</script>
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Data.OleDb;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Xml;
+using MESIII;
+
+namespace ManagerSO
+{
+    public class Retrieval : ISDServer.IRetrieval
+    {
+        public DataSet Execute(IProcess oContext, string sServiceID, string sParams, int nServerID, int nPageIndex, int nPageSize)
+        {
+            DataSet ds = null;
+            try
+            {
+                TArgsRV oArgsRv = new TArgsRV();
+                oArgsRv.ServiceID = sServiceID;
+                oArgsRv.PageIndex = nPageIndex;
+                oArgsRv.PageSize = nPageSize;
+                oArgsRv.Param = sParams;
+                oArgsRv.Context = oContext;
+                oArgsRv.Connecion = oContext.CNEstablish("FleaMarket", nServerID);
+                oArgsRv.Command = oContext.CMD("FleaMarket", nServerID);
+                //****************************************************************
+                ManagerRv Qry = new ManagerRv();
+                //****************************************************************
+                switch (sServiceID)
+                {
+                    #region //Manager QUERY
+                    
+                    //Qry<%=Table.Name%>001 -- QUERY <%=Table.Name%> MODE DATA
+                    case "Qry<%=Table.Name%>001": ds = Qry.Qry<%=Table.Name%>001(oArgsRv); break;
+
+                    #endregion 
+
+                    default: throw new SystemException("Unkown retrieval specifier [ " + sServiceID + " ] !!");
+                }
+                return ds;
+            }
+            catch (MyException e)
+            {
+                throw e;
+            }
+        }
+
+        class ManagerRv
+        {
+            CmnSrvLib cmn = new CmnSrvLib(0);
+            DataSet oResult = new DataSet("root");
+            string qry = "", sql = "";
+
+            #region //EMSA QUERY
+
+            #region //Qry<%=Table.Name%>001 -- QUERY <%=Table.Name%> MODE DATA
+            public DataSet Qry<%=Table.Name%>001(TArgsRV oArgsRv)
+            {
+                OleDbCommand cmd = oArgsRv.Command;
+                qry = oArgsRv.ServiceID;
+                //****************************************************************
+                XmlDocument x = new XmlDocument();
+                x.LoadXml(oArgsRv.Param);
+<%=GetParseParamter() %>               
+                int PAGE_INDEX = cmn.ParserXML(x, "//PAGE_INFO/PAGE_INDEX", -1, false);
+                int PAGE_SIZE = cmn.ParserXML(x, "//PAGE_INFO/PAGE_SIZE", oArgsRv.PageSize, false);
+                string ORDER_BY = cmn.ParserXML(x, "//PAGE_INFO/ORDER_BY", false);
+                //****************************************************************
+<%=GetSql() %>
+
+<%=GetWhere() %>
+                if (!ORDER_BY.Equals("")) { sql += " Order By " + ORDER_BY; }
+                
+                oResult = cmn.CmnRvEnumerate(sql, cmd, oArgsRv.ServiceID, PAGE_INDEX, PAGE_SIZE);
+                return oResult;
+            }
+            #endregion
+
+ 
+            #endregion
+        }
+    }
+}

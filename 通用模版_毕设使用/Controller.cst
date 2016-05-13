@@ -1,0 +1,220 @@
+﻿<%-- 
+Name:控制器生成部分
+Author: 巴维翔
+Description: 生成view所要访问的控制器相关代码。包括get请求，ajax Qry和Tx
+Date:2016-04-09 03:29:24
+Version:1.0
+--%>
+<%@ Template Language="C#" TargetLanguage="Text" %>
+
+<%-- 加载访问数据库的组件SchemaExplorer,并声明其使用的命名空间 --%>
+<%@ Assembly Name="SchemaExplorer"%>
+<%@ Import Namespace="SchemaExplorer"%>
+
+<%@ Assembly Name="System.Collections"%>
+<%@ Import Namespace="System.Collections.Generic"%>
+
+<%@ Import Namespace="System.Linq" %>
+<%-- 选择要操作的表 --%>
+<%@ Property Name="Table" Type="SchemaExplorer.TableSchema" DeepLoad="True" Optional="False" Category="01. Getting Started - Required" Description="Database that the tables views, and stored procedures shouldbe based on. IMPORTANT!!! If SourceTables and SourceViews are left blank, theEntire Database will then be generated." %>
+打印表中的信息:\n
+<%=PrintTableInfo() %>
+<script runat="template">
+    List<ColumnSchema> lcs=new  List<ColumnSchema>();
+    string temKey="",tableName="tableName";
+    public string PrintTableInfo()
+    {
+        //tableName=Table.Name.Split("_").AsQueryable();
+        if(Table.PrimaryKey.MemberColumns.Count>0)
+        {
+            string ouput="";
+            if(GetColumnDataType(Table.PrimaryKey.MemberColumns[0],out ouput)=="int")
+            {
+                temKey="n"+Table.PrimaryKey.MemberColumns[0].Name;
+            }else
+            {
+                temKey="s"+Table.PrimaryKey.MemberColumns[0].Name;
+            }
+        }
+        string colms="Table.FullName---"+Table.FullName+"\n";
+        for(int i=0;i<Table.Columns.Count;i++)
+        {
+             colms+=Table.Columns[i].DataType+":"+Table.Columns[i].Name+"\n";
+             if(!Table.Columns[i].Name.Equals("AddUserID")&&!Table.Columns[i].Name.Equals("AddDateTime")&&!Table.Columns[i].Name.Equals("UpdateUserID")&&!Table.Columns[i].Name.Equals("UpdateDateTime"))
+             {
+                 lcs.Add(Table.Columns[i]);
+             }
+        }
+        return colms;
+    }
+    
+    public string GetColumnDataType(ColumnSchema col,out string defaultValue)
+    {
+        string type="";
+        defaultValue="";
+        switch(col.DataType.ToString())
+        {
+            case "Int16":
+            case "Int32":
+            case "Int64":type="int";defaultValue="-1";break;
+            case "Char":type="char";defaultValue="";break;
+            case "AnsiString":type="string";defaultValue="";break;
+            case "DateTime":
+                type="string";//DateTime类型在参数里面也用string类型就可以
+                //type="DateTime";
+                //defaultValue=DateTime.MinValue.ToString("yyyy/MM/dd hh:mm:ss");
+                defaultValue="";
+                break;
+            default: type="string";defaultValue="";break;
+        }
+        return type;
+    }
+
+    public string GetQryParamter()
+    {
+        string rows="",defaultValue="";
+        foreach(ColumnSchema csa in lcs)
+        {
+            rows+=GetColumnDataType(csa,out defaultValue);
+            if(defaultValue.Equals(""))
+                rows+=" "+csa.Name+"=\""+defaultValue+"\",";
+            else if(defaultValue.Equals("-1"))
+                rows+=" "+csa.Name+"="+defaultValue+",";
+            else
+                rows+=" "+csa.Name+"=\""+defaultValue+"\",";
+        }
+        if(rows.Length>1)
+        {
+            return rows.Substring(0,rows.Length-1);
+        }
+        return rows;
+    }
+    
+    public string GetQry()
+    {
+        string row="\t\t\t\tstring sParam = \"<root><"+Table.Name+">\";\n";
+        foreach(ColumnSchema csa in lcs)
+        {
+            row+="\t\t\t\tsParam += \"<"+csa.Name+">\"+"+csa.Name+"+\"</"+csa.Name+">\";\n";
+        }
+        row+="\t\t\t\tsParam += \"</"+Table.Name+">\";";
+        return row;
+    }
+    
+    public string GetTxParamter()
+    {
+        string rows="",defaultValue="";
+        foreach(ColumnSchema csa in lcs)
+        {
+            rows+=GetColumnDataType(csa,out defaultValue);
+            rows+=" "+csa.Name+" ,";
+        }
+        if(rows.Length>1)
+        {
+            return rows.Substring(0,rows.Length-1);
+        }
+        return rows;
+    }
+    
+    public string GetTx()
+    {
+        string row="\t\t\t\tstring sParam = \"<root><"+Table.Name+">\";\n";
+        foreach(ColumnSchema csa in lcs)
+        {
+            row+="\t\t\t\tsParam += \"<"+csa.Name+">\"+"+csa.Name+"+\"</"+csa.Name+">\";\n";
+        }
+        row+="\t\t\t\tsParam += \"</"+Table.Name+"></root>\";";
+        return row;
+    }
+</script>
+using MES.Models;
+using MES.Services;
+using MESIII;
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Linq;
+using System.Web;
+using System.Web.Mvc;
+
+namespace FleaMarketMS.Controllers
+{
+    public class MamagerController : Controller
+    {
+        #region //ActionResult
+        
+        public ActionResult <%=Table.Name%>(UserModel userModel)
+        {
+            userModel.CURR_DOMAIN = "";
+            userModel.CURR_PACKAGE = "Manager";
+            userModel.CURR_PROGRAM = "<%=Table.Name%>";
+            return View(userModel);
+        }
+        
+        #endregion
+        
+        #region //Qry
+        
+        #region //Qry<%=Table.Name%>001
+        public void Qry<%=Table.Name%>001(<%=GetQryParamter()%>
+        , int PAGE_INDEX = -1, int PAGE_SIZE = -1, string ORDER_BY = "")
+        {
+            try
+            {
+<%=GetQry() %>
+                sParam += "<PAGE_INFO>";
+                sParam += "<PAGE_INDEX>" + PAGE_INDEX + "</PAGE_INDEX>";
+                sParam += "<PAGE_SIZE>" + PAGE_SIZE + "</PAGE_SIZE>";
+                sParam += "<ORDER_BY>" + ORDER_BY + "</ORDER_BY>";
+                sParam += "</PAGE_INFO>";
+                sParam += "</root>";
+                DataSet oDS = client.ctEnumerateData("ManagerSO.Qry<%=Table.Name%>001", sParam);
+                string sData = CmnSrvLib.Dtb2Json(oDS.Tables["Qry<%=Table.Name%>001"]).ToString();
+
+                int TOTAL_COUNT = cmn.cap_int(oDS.Tables["TABLE_ROWS"].Rows[0]["TOTAL_COUNT"]);
+                res = "{\"status\" : \"OK\",\"msg\": \"OK\",\"table_rows\": \"" + TOTAL_COUNT + "\",\"qrydata\":" + sData + "}";
+            }
+            catch (Exception e1)
+            {
+                userModel.MESSAGE = e1.Message;
+                string error_message = Microsoft.JScript.GlobalObject.escape(e1.Message);
+                res = "{\"status\" : \"error\",\"msg\": \"error\",\"error_desc\":\"" + error_message + "\"}";
+            }
+
+            Response.Write(res);
+        }
+        #endregion
+        
+        #endregion
+        
+        #region //Tx
+        
+        #region //Tx<%=Table.Name%>001
+        public void Tx<%=Table.Name%>001(string TxType, <%=GetTxParamter()%>)
+        {
+            try
+            {
+<%=GetTx() %>
+                switch (TxType)
+                {
+                    case "A": nResult = client.ctPostTxact("ManagerSO.Tx<%=Table.Name%>001", sParam, TxTypeConsts.TxTypeAddNew); break;
+                    case "U": nResult = client.ctPostTxact("ManagerSO.Tx<%=Table.Name%>001", sParam, TxTypeConsts.TxTypeUpdate); break;
+                    case "D": nResult = client.ctPostTxact("ManagerSO.Tx<%=Table.Name%>001", sParam, TxTypeConsts.TxTypeDelete); break;
+                    case "C": nResult = client.ctPostTxact("ManagerSO.Tx<%=Table.Name%>001", sParam, TxTypeConsts.TxTypeChange); break;
+                    default: throw new MyException("transaction type error!");
+                }
+                if (nResult > 0) { res = "{\"status\" : \"success\",\"msg\": \"OK\",\"qrydata\":\"" + nResult + "\"}"; }
+            }
+            catch (Exception e1)
+            {
+                userModel.MESSAGE = e1.Message;
+                string error_message = Microsoft.JScript.GlobalObject.escape(e1.Message);
+                res = "{\"status\" : \"error\",\"msg\": \"error\",\"error_desc\":\"" + error_message + "\"}";
+            }
+            Response.Write(res);
+        }
+        #endregion
+        
+        #endregion
+    }
+}

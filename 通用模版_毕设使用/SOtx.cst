@@ -1,0 +1,339 @@
+﻿<%-- 
+Name:SO查询部分
+Author: baweixiang
+Description: 生成控制器所要使用维护的相关代码
+Date:2016-04-10 03:30:04
+Version:1.0
+--%>
+<%@ Template Language="C#" TargetLanguage="Text" %>
+
+<%-- 加载访问数据库的组件SchemaExplorer,并声明其使用的命名空间 --%>
+<%@ Assembly Name="SchemaExplorer"%>
+<%@ Import Namespace="SchemaExplorer"%>
+
+<%@ Assembly Name="System.Collections"%>
+<%@ Import Namespace="System.Collections.Generic"%>
+
+<%@ Import Namespace="System.Linq" %>
+<%-- 选择要操作的表 --%>
+<%@ Property Name="Table" Type="SchemaExplorer.TableSchema" DeepLoad="True" Optional="False" Category="01. Getting Started - Required" Description="Database that the tables views, and stored procedures shouldbe based on. IMPORTANT!!! If SourceTables and SourceViews are left blank, theEntire Database will then be generated." %>
+打印表中的信息:\n
+<%=PrintTableInfo() %>
+<script runat="template">
+    List<ColumnSchema> lcs=new  List<ColumnSchema>();
+    string temKey="",tableName="tableName";
+    public string PrintTableInfo()
+    {
+        //tableName=Table.Name.Split("_").AsQueryable();
+        if(Table.PrimaryKey.MemberColumns.Count>0)
+        {
+            string ouput="";
+            if(GetColumnDataType(Table.PrimaryKey.MemberColumns[0],out ouput)=="int")
+            {
+                temKey="n"+Table.PrimaryKey.MemberColumns[0].Name;
+            }else
+            {
+                temKey="s"+Table.PrimaryKey.MemberColumns[0].Name;
+            }
+        }
+        string colms="Table.FullName---"+Table.FullName+"\n";
+        for(int i=0;i<Table.Columns.Count;i++)
+        {
+             colms+=Table.Columns[i].DataType+":"+Table.Columns[i].Name+"\n";
+             if(!Table.Columns[i].Name.Equals("AddUserID")&&!Table.Columns[i].Name.Equals("AddDateTime")&&!Table.Columns[i].Name.Equals("UpdateUserID")&&!Table.Columns[i].Name.Equals("UpdateDateTime"))
+             {
+                 lcs.Add(Table.Columns[i]);
+             }
+        }
+        return colms;
+    }
+    
+    public string GetColumnDataType(ColumnSchema col,out string defaultValue)
+    {
+        string type="";
+        defaultValue="";
+        switch(col.DataType.ToString())
+        {
+            case "Int16":
+            case "Int32":
+            case "Int64":type="int";defaultValue="-1";break;
+            case "Char":type="char";defaultValue="";break;
+            case "AnsiString":type="string";defaultValue="";break;
+            case "DateTime":type="string";
+                //defaultValue=DateTime.MinValue.ToString("yyyy/MM/dd hh:mm:ss");
+                defaultValue="";
+                break;
+            default: type="string";defaultValue="";break;
+        }
+        return type;
+    }
+
+    public string GetParseParamter()
+    {
+        string rows="",defaultValue="";
+        foreach(ColumnSchema csa in lcs)
+        {
+            rows+="\t\t\t\t"+GetColumnDataType(csa,out defaultValue)+" "+csa.Name;
+            if(defaultValue.Equals(""))
+                rows +=" = cmn.ParserXML(x, \"//"+Table.Name+"/"+csa.Name+"\");\n";
+            else if(defaultValue.Equals("-1"))
+                rows +=" = cmn.ParserXML(x, \"//"+Table.Name+"/"+csa.Name+"\",-999);\n";
+            else
+                rows +=" = cmn.ParserXML(x, \"//"+Table.Name+"/"+csa.Name+"\");\n";
+        }
+        if(rows.Length>1)
+        {
+            return rows.Substring(0,rows.Length-1);
+        }
+        return rows;
+    }
+    
+    public string GetValidate(char T)
+    {
+        string rows="",defaultValue="";
+        switch(T)
+        {
+            case 'i':
+            foreach(ColumnSchema csa in lcs)
+            {
+                if(!csa.AllowDBNull&&!csa.IsPrimaryKeyMember&&!csa.Name.Equals("StatusNO"))
+                {
+                    GetColumnDataType(csa,out defaultValue);
+                    if(defaultValue.Equals(""))
+                    {
+                        rows+="\t\t\t\t\t\tif("+csa.Name+".Equals(\"\")) { throw new MyException(\""+csa.Description.Split('|')[0]+"不能为空\"); }\n";
+                    }else if(defaultValue.Equals("-1"))
+                    {
+                        rows+="\t\t\t\t\t\tif("+csa.Name+"<=-1) { throw new MyException(\""+csa.Description.Split('|')[0]+"不能为空\"); }\n";
+                    }else
+                    {
+                        rows+="\t\t\t\t\t\tif("+csa.Name+".Equals(\"\")) { throw new MyException(\""+csa.Description.Split('|')[0]+"不能为空\"); }\n";
+                    }
+                }
+            }
+            break;
+            case 'u':
+            foreach(ColumnSchema csa in lcs)
+            {
+                if(!csa.AllowDBNull&&!csa.Name.Equals("StatusNO"))
+                {
+                    GetColumnDataType(csa,out defaultValue);
+                    if(defaultValue.Equals(""))
+                    {
+                        rows+="\t\t\t\t\t\tif("+csa.Name+".Equals(\"\")) { throw new MyException(\""+csa.Description.Split('|')[0]+"不能为空\"); }\n";
+                    }else if(defaultValue.Equals("-1"))
+                    {
+                        rows+="\t\t\t\t\t\tif("+csa.Name+"<=-1) { throw new MyException(\""+csa.Description.Split('|')[0]+"不能为空\"); }\n";
+                    }else
+                    {
+                        rows+="\t\t\t\t\t\tif("+csa.Name+".Equals(\"\")) { throw new MyException(\""+csa.Description.Split('|')[0]+"不能为空\"); }\n";
+                    }
+                }
+            }
+            break;
+            case 'd'://目前删除，只是更改状态
+            foreach(ColumnSchema csa in lcs)
+            {
+                if(csa.IsPrimaryKeyMember)
+                {
+                    GetColumnDataType(csa,out defaultValue);
+                    if(defaultValue.Equals(""))
+                    {
+                        rows+="\t\t\t\t\t\tif ("+csa.Name+".Equals(\"\")) { throw new MyException(\""+csa.Description.Split('|')[0]+"不能为空\"); }\n";
+                    }else if(defaultValue.Equals("-1"))
+                    {
+                        rows+="\t\t\t\t\t\tif ("+csa.Name+"<=-1) { throw new MyException(\""+csa.Description.Split('|')[0]+"不能为空\"); }\n";
+                    }else
+                    {
+                        rows+="\t\t\t\t\t\tif ("+csa.Name+".Equals(\"\")) { throw new MyException(\""+csa.Description.Split('|')[0]+"不能为空\"); }\n";
+                    }
+                }
+            }
+            break;
+            case 'c'://作为删除，状态改为禁用S，只是更改状态
+                GetColumnDataType(Table.PrimaryKey.MemberColumns[0],out defaultValue);
+                if(defaultValue.Equals("-1"))
+                    rows+="\t\t\t\t\t\tif ("+Table.PrimaryKey.MemberColumns[0].Name+".Equals(\"\")) { throw new MyException(\""+Table.PrimaryKey.MemberColumns[0].Description.Split('|')[0]+"不能为空\"); }\n";
+                else
+                    rows+="\t\t\t\t\t\tif ("+Table.PrimaryKey.MemberColumns[0].Name+".Equals(\"\")) { throw new MyException(\""+Table.PrimaryKey.MemberColumns[0].Description.Split('|')[0]+"不能为空\"); }\n";
+                rows+="\t\t\t\t\t\tif (StatusNO.Equals(\"\")) { throw new MyException(\"状态编号不能为空\"); }\n";
+            break;
+        }
+        if(rows.Length>1)
+        {
+            return rows.Substring(0,rows.Length-1);
+        }
+        return rows;
+    }
+    
+    public string CheckExist()
+    {//待修改:应为当前每个表都是ID作为主键，没有判断是否有重合的，但是当数据库里面有AK的时候是要判断的
+        return "";
+    }
+    public string GetSqlInsert()
+    {
+        string rows="\t\t\t\t\t\tsql =\" Insert Into "+Table.Name+" (";
+        foreach(ColumnSchema csa in lcs)
+        {
+            if(!csa.IsPrimaryKeyMember&&!csa.Name.Equals("StatusNO"))
+            rows+=csa.Name+",";
+        }
+        rows=rows+"StatusNO,\";\n";
+        rows+="\t\t\t\t\t\tsql += \"AddUserID,AddDateTime,UpdateUserID,UpdateDateTime)\";\n";
+        rows+="\t\t\t\t\t\tsql += \"Values(\"";
+        foreach(ColumnSchema csa in lcs)
+        {
+            if(!csa.IsPrimaryKeyMember&&!csa.Name.Equals("StatusNO"))
+            rows+="+cmn.SQLQC("+csa.Name+")";
+        }
+        rows+="+cmn.SQLQC(\"A\")";
+        rows+=";\n";
+        rows+= "\t\t\t\t\t\tsql += cmn.SQLQC(nUserID) + cmn.SQLQC(DateTime.Now) + cmn.SQLQC(nUserID) + cmn.SQLQ(DateTime.Now) + \")\";";
+        return rows;
+    }
+    
+    public string GetSqlDelete()
+    {
+        string rows="\t\t\t\t\t\tsql =\" Delete From "+Table.Name+" Where "+Table.PrimaryKey.MemberColumns[0].Name+" =\"+ cmn.SQLQ("+Table.PrimaryKey.MemberColumns[0].Name+");";
+        return rows;
+    }
+    
+    public string GetSqlUpdate()
+    {//待修改:逐渐那部分，我现在只是取第一个，如果多个也应该拼接起来
+        string rows="\t\t\t\t\t\tsql =\" Update "+Table.Name+" Set \";\n";
+        foreach(ColumnSchema csa in lcs)
+        {
+            if(!csa.IsPrimaryKeyMember&&!csa.Name.Equals("StatusNO"))
+            rows+="\t\t\t\t\t\tsql +=\""+csa.Name+"=\"+ cmn.SQLQC("+csa.Name+");\n";
+        }
+        rows+="\t\t\t\t\t\tsql +=\"UpdateUserID=\"+ cmn.SQLQC(nUserID);\n";
+        rows+="\t\t\t\t\t\tsql +=\"UpdateDateTime=\"+ cmn.SQLQ(DateTime.Now);\n";
+        rows+="\t\t\t\t\t\tsql +=\" Where "+Table.PrimaryKey.MemberColumns[0].Name+" =\"+ cmn.SQLQ("+Table.PrimaryKey.MemberColumns[0].Name+");";
+        return rows;
+    }
+
+    public string GetSqlUpdateStatue()
+    {//待修改:逐渐那部分，我现在只是取第一个，如果多个也应该拼接起来,只用检查StatusNO这一项还没做
+        string rows="\t\t\t\t\t\tsql =\" Update "+Table.Name+" Set \";\n";
+        rows+="\t\t\t\t\t\tsql +=\"StatusNO=\"+ cmn.SQLQC(StatusNO);\n";
+        rows+="\t\t\t\t\t\tsql +=\"UpdateUserID=\"+ cmn.SQLQC(nUserID);\n";
+        rows+="\t\t\t\t\t\tsql +=\"UpdateDateTime=\"+ cmn.SQLQ(DateTime.Now);\n";
+        rows+="\t\t\t\t\t\tsql +=\" Where "+Table.PrimaryKey.MemberColumns[0].Name+" =\"+ cmn.SQLQ("+Table.PrimaryKey.MemberColumns[0].Name+");";
+        return rows;
+    }
+
+</script>
+
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Data.OleDb;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Xml;
+using MESIII;
+
+namespace ManagerSO
+{
+    public class Transaction : ISDServer.ITransaction
+    {
+        public int Execute(IProcess oContext, string sServiceID, string sParams, TxTypeConsts nTxType, int nServerID)
+        {
+            try
+            {
+                TArgsTX oArgsTx = new TArgsTX();
+                oArgsTx.ServiceID = sServiceID;
+                oArgsTx.Param = sParams;
+                oArgsTx.Context = oContext;
+                oArgsTx.Connecion = oContext.CNEstablish("FleaMarket", nServerID);
+                oArgsTx.Command = oContext.CMD("FleaMarket", nServerID);
+                oArgsTx.ServerID = nServerID;
+                oArgsTx.TxType = nTxType;
+                oArgsTx.Result = -1;
+                int nResult = 0;
+                //****************************************************************
+                oContext.TxBegin("FleaMarket", nServerID);
+                //****************************************************************
+                ManagerTx Tx = new ManagerTx();
+                //****************************************************************
+                switch (sServiceID)
+                {
+                    #region //Manager TRANSACTION
+                    
+                    //Tx<%=Table.Name%>001 -- DEAL <%=Table.Name%> DATA MAINTAIN
+                    case "Tx<%=Table.Name%>001": nResult = Tx.Tx<%=Table.Name%>001(oArgsTx); break;
+                    
+                    #endregion
+                    default: throw new SystemException("Unkown transaction specifier [ " + sServiceID + " ]");
+                }
+                //****************************************************************			
+                oContext.TxCommit("FleaMarket", nServerID);
+                return nResult;
+            }
+            catch (MyException e)
+            {
+                oContext.TxRollback("FleaMarket", nServerID);
+                throw e;
+            }
+        }
+        class ManagerTx
+        {
+            CmnSrvLib cmn = new CmnSrvLib(0);
+            ISDServer srv = new ISDServer();
+            int nResult = 0;
+            string sql = "", tx = "";
+
+            #region //Manager TRANSACTION
+            #region  //Tx<%=Table.Name%>001 -- DEAL <%=Table.Name%> DATA MAINTAIN
+            public int Tx<%=Table.Name%>001(TArgsTX oArgsTx)
+            {
+                OleDbCommand cmd = oArgsTx.Command;
+                int nUserID = oArgsTx.Context.UserID();
+                tx = oArgsTx.ServiceID;
+                //***********************************************************************
+                XmlDocument x = new XmlDocument();
+                x.LoadXml(oArgsTx.Param);
+<%=GetParseParamter() %>
+                //***********************************************************************
+
+                DataSet oDS = new DataSet();
+                switch (oArgsTx.TxType)
+                {
+                    case TxTypeConsts.TxTypeAddNew:
+<%=GetValidate('i') %>
+
+<%=GetSqlInsert() %>
+                        nResult = cmn.CmnExecute(sql, cmd);
+                        break;
+                    //***********************************************************************
+                    case TxTypeConsts.TxTypeUpdate:
+<%=GetValidate('u') %>
+
+<%=GetSqlUpdate() %>
+                        nResult = cmn.CmnExecute(sql, cmd);
+                        break;
+                    //***********************************************************************
+                        case TxTypeConsts.TxTypeDelete:
+<%=GetValidate('d') %>
+                        
+<%=GetSqlDelete() %>                        
+                        nResult = cmn.CmnExecute(sql, cmd);
+                        break;
+                    //***********************************************************************
+                    case TxTypeConsts.TxTypeChange:
+<%=GetValidate('c') %>
+
+<%=GetSqlUpdateStatue() %>                    
+                        nResult = cmn.CmnExecute(sql, cmd);
+                        break;
+                    //***********************************************************************
+                }
+                return nResult;
+            }
+            #endregion
+
+            #endregion
+        }
+    }
+}
